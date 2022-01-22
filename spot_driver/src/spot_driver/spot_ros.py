@@ -315,19 +315,19 @@ class SpotROS():
         except Exception as e:
             return SetBoolResponse(False, 'Error:{}'.format(e))
 
-    def handle_gait_trot(self):
+    def handle_gait_trot(self, req):
         return self.handle_locomotion_mode({locomotion_mode: 3})
-    def handle_gait_crawl(self):
+    def handle_gait_crawl(self, req):
         return self.handle_locomotion_mode({locomotion_mode: 10})
-    def handle_gait_amble(self):
+    def handle_gait_amble(self, req):
         return self.handle_locomotion_mode({locomotion_mode: 6})
-    def handle_gait_jog(self):
+    def handle_gait_jog(self, req):
         return self.handle_locomotion_mode({locomotion_mode: 7})
-    def handle_step_low(self):
+    def handle_step_low(self, req):
         return self.handle_step_height({swing_height: 1})
-    def handle_step_med(self):
+    def handle_step_med(self, req):
         return self.handle_step_height({swing_height: 2})
-    def handle_step_high(self):
+    def handle_step_high(self, req):
         return self.handle_step_height({swing_height: 3})
 
     def handle_step_height(self, req):
