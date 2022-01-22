@@ -315,26 +315,37 @@ class SpotROS():
         except Exception as e:
             return SetBoolResponse(False, 'Error:{}'.format(e))
 
+    def handle_gait_auto(self, req):
+        return self.handle_gait(1)
     def handle_gait_trot(self, req):
-        return self.handle_locomotion_mode({locomotion_mode: 3})
+        return self.handle_gait(3)
     def handle_gait_crawl(self, req):
-        return self.handle_locomotion_mode({locomotion_mode: 10})
+        return self.handle_gait(10)
     def handle_gait_amble(self, req):
-        return self.handle_locomotion_mode({locomotion_mode: 6})
+        return self.handle_gait(6)
     def handle_gait_jog(self, req):
-        return self.handle_locomotion_mode({locomotion_mode: 7})
-    def handle_step_low(self, req):
-        return self.handle_step_height({swing_height: 1})
-    def handle_step_med(self, req):
-        return self.handle_step_height({swing_height: 2})
-    def handle_step_high(self, req):
-        return self.handle_step_height({swing_height: 3})
+        return self.handle_gait(7)
+    def handle_gait(self, mode):
+        req = SetLocomotion()
+        req.locomotion_mode = mode
+        try:
+            self.handle_locomotion_mode(req)
+            return TriggerResponse(True, 'Success')
+        except Exception as e:
+            return TriggerResponse(False, 'Error:{}'.format(e))
 
+    def handle_step_low(self, req):
+        return self.handle_step_height({"swing_height": 1})
+    def handle_step_med(self, req):
+        return self.handle_step_height({"swing_height": 2})
+    def handle_step_high(self, req):
+        return self.handle_step_height({"swing_height": 3})
+  
     def handle_step_height(self, req):
         """ROS service handler to set locomotion mode"""
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
-            mobility_params.swing_height = req.swing_height
+            mobility_params.swing_height = req["swing_height"]
             self.spot_wrapper.set_mobility_params( mobility_params )
             return TriggerResponse(True, 'Success')
         except Exception as e:
@@ -619,6 +630,7 @@ class SpotROS():
             rospy.Service("power_on", Trigger, self.handle_power_on)
             rospy.Service("power_off", Trigger, self.handle_safe_power_off)
 
+            rospy.Service("gait_auto", Trigger, self.handle_gait_auto)
             rospy.Service("gait_trot", Trigger, self.handle_gait_trot)
             rospy.Service("gait_crawl", Trigger, self.handle_gait_crawl)
             rospy.Service("gait_amble", Trigger, self.handle_gait_amble)
