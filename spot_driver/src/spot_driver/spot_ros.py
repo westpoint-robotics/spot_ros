@@ -1,7 +1,7 @@
 import rospy
 
 from std_srvs.srv import Trigger, TriggerResponse, SetBool, SetBoolResponse
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float64
 from tf2_msgs.msg import TFMessage
 from geometry_msgs.msg import TransformStamped
 from sensor_msgs.msg import Image, CameraInfo
@@ -114,6 +114,16 @@ class SpotROS():
             # Behavior Faults #
             behavior_fault_state_msg = getBehaviorFaultsFromState(state, self.spot_wrapper)
             self.behavior_faults_pub.publish(behavior_fault_state_msg)
+
+            # custom
+            batterypercent_msg = Float64()
+            batterypercent_msg.data = power_state_msg.locomotion_charge_percentage
+            self.batterypercent_pub.publish(batterypercent_msg)
+
+            batteryseconds_msg = Float64()
+            batteryseconds_msg.data = power_state_msg.locomotion_estimated_runtime.to_sec()
+            self.batteryseconds_pub.publish(batteryseconds_msg)
+
 
     def MetricsCB(self, results):
         """Callback for when the Spot Wrapper gets new metrics data.
@@ -304,6 +314,31 @@ class SpotROS():
             return SetBoolResponse(True, 'Success')
         except Exception as e:
             return SetBoolResponse(False, 'Error:{}'.format(e))
+
+    def handle_gait_trot(self):
+        return self.handle_locomotion_mode({locomotion_mode: 3})
+    def handle_gait_crawl(self):
+        return self.handle_locomotion_mode({locomotion_mode: 10})
+    def handle_gait_amble(self):
+        return self.handle_locomotion_mode({locomotion_mode: 6})
+    def handle_gait_jog(self):
+        return self.handle_locomotion_mode({locomotion_mode: 7})
+    def handle_step_low(self):
+        return self.handle_step_height({swing_height: 1})
+    def handle_step_med(self):
+        return self.handle_step_height({swing_height: 2})
+    def handle_step_high(self):
+        return self.handle_step_height({swing_height: 3})
+
+    def handle_step_height(self, req):
+        """ROS service handler to set locomotion mode"""
+        try:
+            mobility_params = self.spot_wrapper.get_mobility_params()
+            mobility_params.swing_height = req.swing_height
+            self.spot_wrapper.set_mobility_params( mobility_params )
+            return TriggerResponse(True, 'Success')
+        except Exception as e:
+            return TriggerResponse(False, 'Error:{}'.format(e))
 
     def handle_locomotion_mode(self, req):
         """ROS service handler to set locomotion mode"""
@@ -565,6 +600,9 @@ class SpotROS():
             self.behavior_faults_pub = rospy.Publisher('status/behavior_faults', BehaviorFaultState, queue_size=10)
             self.system_faults_pub = rospy.Publisher('status/system_faults', SystemFaultState, queue_size=10)
 
+            self.batterypercent_pub = rospy.Publisher('status/battery_percent', Float64, queue_size=1)
+            self.batteryseconds_pub = rospy.Publisher('status/battery_seconds', Float64, queue_size=1)
+
             self.feedback_pub = rospy.Publisher('status/feedback', Feedback, queue_size=10)
 
             self.mobility_params_pub = rospy.Publisher('status/mobility_params', MobilityParams, queue_size=10)
@@ -580,6 +618,14 @@ class SpotROS():
             rospy.Service("stand", Trigger, self.handle_stand)
             rospy.Service("power_on", Trigger, self.handle_power_on)
             rospy.Service("power_off", Trigger, self.handle_safe_power_off)
+
+            rospy.Service("gait_trot", Trigger, self.handle_gait_trot)
+            rospy.Service("gait_crawl", Trigger, self.handle_gait_crawl)
+            rospy.Service("gait_amble", Trigger, self.handle_gait_amble)
+            rospy.Service("gait_jog", Trigger, self.handle_gait_jog)
+            rospy.Service("step_low", Trigger, self.handle_step_low)
+            rospy.Service("step_med", Trigger, self.handle_step_med)
+            rospy.Service("step_high", Trigger, self.handle_step_high)
 
             rospy.Service("estop/hard", Trigger, self.handle_estop_hard)
             rospy.Service("estop/gentle", Trigger, self.handle_estop_soft)
