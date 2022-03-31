@@ -72,9 +72,10 @@ class SpotROS():
             self.joint_state_pub.publish(joint_state)
 
             ## TF ##
-            tf_msg = GetTFFromState(state, self.spot_wrapper, self.mode_parent_odom_tf)
-            if len(tf_msg.transforms) > 0:
-                self.tf_pub.publish(tf_msg)
+            if self.publish_tf:
+                tf_msg = GetTFFromState(state, self.spot_wrapper, self.mode_parent_odom_tf)
+                if len(tf_msg.transforms) > 0:
+                    self.tf_pub.publish(tf_msg)
 
             # Odom Twist #
             twist_odom_msg = GetOdomTwistFromState(state, self.spot_wrapper)
@@ -543,6 +544,7 @@ class SpotROS():
         self.hostname = rospy.get_param('~hostname', 'default_value')
         self.motion_deadzone = rospy.get_param('~deadzone', 0.05)
         self.estop_timeout = rospy.get_param('~estop_timeout', 9.0)
+        self.publish_tf = rospy.get_param('~publish_tf', False)
 
         self.camera_static_transform_broadcaster = tf2_ros.StaticTransformBroadcaster()
         # Static transform broadcaster is super simple and just a latched publisher. Every time we add a new static
