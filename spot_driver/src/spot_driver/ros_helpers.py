@@ -77,7 +77,7 @@ class DefaultCameraInfo(CameraInfo):
         self.P[11] = 0
 
 
-def populateTransformStamped(time, parent_frame, child_frame, transform):
+def populateTransformStamped(time, parent_frame, child_frame, transform, tf_prefix):
     """Populates a TransformStamped message
 
     Args:
@@ -91,8 +91,8 @@ def populateTransformStamped(time, parent_frame, child_frame, transform):
     """
     new_tf = TransformStamped()
     new_tf.header.stamp = time
-    new_tf.header.frame_id = parent_frame
-    new_tf.child_frame_id = child_frame
+    new_tf.header.frame_id = tf_prefix + parent_frame
+    new_tf.child_frame_id = tf_prefix + child_frame
     new_tf.transform.translation.x = transform.position.x
     new_tf.transform.translation.y = transform.position.y
     new_tf.transform.translation.z = transform.position.z
@@ -103,7 +103,7 @@ def populateTransformStamped(time, parent_frame, child_frame, transform):
 
     return new_tf
 
-def getImageMsg(data, spot_wrapper):
+def getImageMsg(data, spot_wrapper, tf_prefix):
     """Takes the imag and  camera data and populates the necessary ROS messages
 
     Args:
@@ -117,7 +117,7 @@ def getImageMsg(data, spot_wrapper):
     image_msg = Image()
     local_time = spot_wrapper.robotToLocalTime(data.shot.acquisition_time)
     image_msg.header.stamp = rospy.Time(local_time.seconds, local_time.nanos)
-    image_msg.header.frame_id = data.shot.frame_name_image_sensor
+    image_msg.header.frame_id = tf_prefix + data.shot.frame_name_image_sensor
     image_msg.height = data.shot.image.rows
     image_msg.width = data.shot.image.cols
 
@@ -162,7 +162,7 @@ def getImageMsg(data, spot_wrapper):
     camera_info_msg = DefaultCameraInfo()
     local_time = spot_wrapper.robotToLocalTime(data.shot.acquisition_time)
     camera_info_msg.header.stamp = rospy.Time(local_time.seconds, local_time.nanos)
-    camera_info_msg.header.frame_id = data.shot.frame_name_image_sensor
+    camera_info_msg.header.frame_id = tf_prefix + data.shot.frame_name_image_sensor
     camera_info_msg.height = data.shot.image.rows
     camera_info_msg.width = data.shot.image.cols
 
@@ -260,7 +260,7 @@ def GetOdomTwistFromState(state, spot_wrapper):
     twist_odom_msg.twist.twist.angular.z = state.kinematic_state.velocity_of_body_in_odom.angular.z
     return twist_odom_msg
 
-def GetOdomFromState(state, spot_wrapper, use_vision=True):
+def GetOdomFromState(state, spot_wrapper, tf_prefix, use_vision=True):
     """Maps odometry data from robot state proto to ROS Odometry message
 
     Args:
@@ -273,12 +273,13 @@ def GetOdomFromState(state, spot_wrapper, use_vision=True):
     local_time = spot_wrapper.robotToLocalTime(state.kinematic_state.acquisition_timestamp)
     odom_msg.header.stamp = rospy.Time(local_time.seconds, local_time.nanos)
     if use_vision == True:
-        odom_msg.header.frame_id = 'vision'
+        odom_msg.header.frame_id = tf_prefix + 'vision'
         tform_body = get_vision_tform_body(state.kinematic_state.transforms_snapshot)
     else:
-        odom_msg.header.frame_id = 'odom'
+        odom_msg.header.frame_id = tf_prefix + 'odom'
         tform_body = get_odom_tform_body(state.kinematic_state.transforms_snapshot)
-    odom_msg.child_frame_id = 'body'
+
+    odom_msg.child_frame_id = tf_prefix + 'body'
     pose_odom_msg = PoseWithCovariance()
     pose_odom_msg.pose.position.x = tform_body.position.x
     pose_odom_msg.pose.position.y = tform_body.position.y
@@ -310,7 +311,7 @@ def GetWifiFromState(state, spot_wrapper):
 
     return wifi_msg
 
-def GetTFFromState(state, spot_wrapper, inverse_target_frame):
+def GetTFFromState(state, spot_wrapper, inverse_target_frame, tf_prefix, publish_odom = False):
     """Maps robot link state data from robot state proto to ROS TFMessage message
 
     Args:
@@ -323,6 +324,8 @@ def GetTFFromState(state, spot_wrapper, inverse_target_frame):
     tf_msg = TFMessage()
 
     for frame_name in state.kinematic_state.transforms_snapshot.child_to_parent_edge_map:
+        if not publish_odom and (frame_name == "odom" or frame_name == "body"):
+            continue;
         if state.kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name:
             try:
                 transform = state.kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
@@ -330,9 +333,9 @@ def GetTFFromState(state, spot_wrapper, inverse_target_frame):
                 tf_time = rospy.Time(local_time.seconds, local_time.nanos)
                 if inverse_target_frame == frame_name:
                     geo_tform_inversed = SE3Pose.from_obj(transform.parent_tform_child).inverse()
-                    new_tf = populateTransformStamped(tf_time, frame_name, transform.parent_frame_name, geo_tform_inversed)
+                    new_tf = populateTransformStamped(tf_time, frame_name, transform.parent_frame_name, geo_tform_inversed, tf_prefix)
                 else:
-                    new_tf = populateTransformStamped(tf_time, transform.parent_frame_name, frame_name, transform.parent_tform_child)
+                    new_tf = populateTransformStamped(tf_time, transform.parent_frame_name, frame_name, transform.parent_tform_child, tf_prefix)
                 tf_msg.transforms.append(new_tf)
             except Exception as e:
                 spot_wrapper.logger.error('Error: {}'.format(e))
