@@ -316,6 +316,22 @@ class SpotROS():
         except Exception as e:
             return SetBoolResponse(False, 'Error:{}'.format(e))
 
+    def handle_obstacle_avoidance_mode(self, req):
+        """ROS service handler to toggle obstacle avoidance for the robot."""
+        padding = 0.25
+        if req.data:
+            padding = 0.001        
+        try:
+            mobility_params = self.spot_wrapper.get_mobility_params()
+            mobility_params.obstacle_params.disable_vision_body_obstacle_avoidance = req.data
+            mobility_params.obstacle_params.disable_vision_foot_obstacle_avoidance = req.data
+            mobility_params.obstacle_params.disable_vision_foot_constraint_avoidance = req.data
+            mobility_params.obstacle_params.obstacle_avoidance_padding = padding
+            self.spot_wrapper.set_mobility_params( mobility_params )
+            return SetBoolResponse(True, 'Success')
+        except Exception as e:
+            return SetBoolResponse(False, 'Error:{}'.format(e))
+
     def handle_gait_auto(self, req):
         return self.handle_gait(1)
     def handle_gait_trot(self, req):
@@ -646,6 +662,7 @@ class SpotROS():
             rospy.Service("estop/release", Trigger, self.handle_estop_disengage)
 
             rospy.Service("stair_mode", SetBool, self.handle_stair_mode)
+            rospy.Service("obstacle_avoidance", SetBool, self.handle_obstacle_avoidance_mode)
             rospy.Service("locomotion_mode", SetLocomotion, self.handle_locomotion_mode)
             rospy.Service("max_velocity", SetVelocity, self.handle_max_vel)
             rospy.Service("clear_behavior_fault", ClearBehaviorFault, self.handle_clear_behavior_fault)
