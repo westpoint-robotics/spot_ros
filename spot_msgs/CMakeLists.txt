@@ -20,6 +20,7 @@ add_message_files(
   LeaseArray.msg
   LeaseOwner.msg
   Metrics.msg
+  ObstacleParams.msg
   MobilityParams.msg
   SystemFault.msg
   WiFiState.msg
