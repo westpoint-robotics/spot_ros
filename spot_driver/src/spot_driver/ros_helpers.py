@@ -1,4 +1,5 @@
 import rospy
+import numpy as np
 
 from std_msgs.msg import Empty
 from tf2_msgs.msg import TFMessage
@@ -21,7 +22,7 @@ from spot_msgs.msg import SystemFault, SystemFaultState
 from spot_msgs.msg import BatteryState, BatteryStateArray
 
 from bosdyn.api import image_pb2
-from bosdyn.client.math_helpers import SE3Pose
+from bosdyn.client.math_helpers import SE3Pose, Quat
 from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body
 
 friendly_joint_names = {}
@@ -240,7 +241,7 @@ def GetFeetFromState(state, spot_wrapper):
 
     return foot_array_msg
 
-def GetOdomTwistFromState(state, spot_wrapper):
+def GetOdomTwistFromState(state, spot_wrapper, use_enu_frame = True):
     """Maps odometry data from robot state proto to ROS TwistWithCovarianceStamped message
 
     Args:
@@ -252,15 +253,23 @@ def GetOdomTwistFromState(state, spot_wrapper):
     twist_odom_msg = TwistWithCovarianceStamped()
     local_time = spot_wrapper.robotToLocalTime(state.kinematic_state.acquisition_timestamp)
     twist_odom_msg.header.stamp = rospy.Time(local_time.seconds, local_time.nanos)
-    twist_odom_msg.twist.twist.linear.x = state.kinematic_state.velocity_of_body_in_odom.linear.x
-    twist_odom_msg.twist.twist.linear.y = state.kinematic_state.velocity_of_body_in_odom.linear.y
-    twist_odom_msg.twist.twist.linear.z = state.kinematic_state.velocity_of_body_in_odom.linear.z
-    twist_odom_msg.twist.twist.angular.x = state.kinematic_state.velocity_of_body_in_odom.angular.x
-    twist_odom_msg.twist.twist.angular.y = state.kinematic_state.velocity_of_body_in_odom.angular.y
-    twist_odom_msg.twist.twist.angular.z = state.kinematic_state.velocity_of_body_in_odom.angular.z
+    if use_enu_frame:
+        twist_odom_msg.twist.twist.linear.x = state.kinematic_state.velocity_of_body_in_odom.linear.y
+        twist_odom_msg.twist.twist.linear.y = state.kinematic_state.velocity_of_body_in_odom.linear.x
+        twist_odom_msg.twist.twist.linear.z = state.kinematic_state.velocity_of_body_in_odom.linear.z * -1
+        twist_odom_msg.twist.twist.angular.x = state.kinematic_state.velocity_of_body_in_odom.angular.y
+        twist_odom_msg.twist.twist.angular.y = state.kinematic_state.velocity_of_body_in_odom.angular.x
+        twist_odom_msg.twist.twist.angular.z = state.kinematic_state.velocity_of_body_in_odom.angular.z * -1
+    else:
+        twist_odom_msg.twist.twist.linear.x = state.kinematic_state.velocity_of_body_in_odom.linear.x
+        twist_odom_msg.twist.twist.linear.y = state.kinematic_state.velocity_of_body_in_odom.linear.y
+        twist_odom_msg.twist.twist.linear.z = state.kinematic_state.velocity_of_body_in_odom.linear.z
+        twist_odom_msg.twist.twist.angular.x = state.kinematic_state.velocity_of_body_in_odom.angular.x
+        twist_odom_msg.twist.twist.angular.y = state.kinematic_state.velocity_of_body_in_odom.angular.y
+        twist_odom_msg.twist.twist.angular.z = state.kinematic_state.velocity_of_body_in_odom.angular.z
     return twist_odom_msg
 
-def GetOdomFromState(state, spot_wrapper, tf_prefix, use_vision=True):
+def GetOdomFromState(state, spot_wrapper, tf_prefix, use_enu_frame, use_vision=True):
     """Maps odometry data from robot state proto to ROS Odometry message
 
     Args:
@@ -281,16 +290,33 @@ def GetOdomFromState(state, spot_wrapper, tf_prefix, use_vision=True):
 
     odom_msg.child_frame_id = tf_prefix + 'body'
     pose_odom_msg = PoseWithCovariance()
-    pose_odom_msg.pose.position.x = tform_body.position.x
-    pose_odom_msg.pose.position.y = tform_body.position.y
-    pose_odom_msg.pose.position.z = tform_body.position.z
-    pose_odom_msg.pose.orientation.x = tform_body.rotation.x
-    pose_odom_msg.pose.orientation.y = tform_body.rotation.y
-    pose_odom_msg.pose.orientation.z = tform_body.rotation.z
-    pose_odom_msg.pose.orientation.w = tform_body.rotation.w
+
+    # rospy.loginfo(f"quat: {tform_body.rotation.w} {tform_body.rotation.x} {tform_body.rotation.y} {tform_body.rotation.z}")
+    
+    if use_enu_frame:
+
+        pose_odom_msg.pose.position.x = tform_body.position.y
+        pose_odom_msg.pose.position.y = tform_body.position.x
+        pose_odom_msg.pose.position.z = tform_body.position.z * -1
+        
+        q_rot = Quat.from_matrix(np.array([[0, 1, 0], [1, 0, 0], [0, 0, -1]]))
+        q_new = q_rot * tform_body.rotation
+
+        pose_odom_msg.pose.orientation.x = q_new.x
+        pose_odom_msg.pose.orientation.y = q_new.y
+        pose_odom_msg.pose.orientation.z = q_new.z
+        pose_odom_msg.pose.orientation.w = q_new.w
+    else:
+        pose_odom_msg.pose.position.x = tform_body.position.x
+        pose_odom_msg.pose.position.y = tform_body.position.y
+        pose_odom_msg.pose.position.z = tform_body.position.z
+        pose_odom_msg.pose.orientation.x = tform_body.rotation.x
+        pose_odom_msg.pose.orientation.y = tform_body.rotation.y
+        pose_odom_msg.pose.orientation.z = tform_body.rotation.z
+        pose_odom_msg.pose.orientation.w = tform_body.rotation.w
 
     odom_msg.pose = pose_odom_msg
-    twist_odom_msg = GetOdomTwistFromState(state, spot_wrapper).twist
+    twist_odom_msg = GetOdomTwistFromState(state, spot_wrapper, use_enu_frame).twist
     odom_msg.twist = twist_odom_msg
     return odom_msg
 
@@ -324,8 +350,10 @@ def GetTFFromState(state, spot_wrapper, inverse_target_frame, tf_prefix, publish
     tf_msg = TFMessage()
 
     for frame_name in state.kinematic_state.transforms_snapshot.child_to_parent_edge_map:
-        if not publish_odom and (frame_name == "odom" or frame_name == "body"):
+        if not publish_odom and (frame_name == "odom" or frame_name == "gpe"):
+            # rospy.loginfo("not publishing tf %s", frame_name)
             continue;
+            
         if state.kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name:
             try:
                 transform = state.kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
