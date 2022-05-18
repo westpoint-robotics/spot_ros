@@ -1,0 +1,6 @@
+bool disable_vision_foot_obstacle_avoidance
+bool disable_vision_foot_constraint_avoidance
+bool disable_vision_body_obstacle_avoidance
+bool disable_vision_foot_obstacle_body_assist
+bool disable_vision_negative_obstacles
+float64 obstacle_avoidance_padding

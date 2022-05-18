@@ -1,3 +1,5 @@
 geometry_msgs/Pose body_control
 uint32 locomotion_hint
+uint32 swing_height
 bool stair_hint
+ObstacleParams obstacle_params

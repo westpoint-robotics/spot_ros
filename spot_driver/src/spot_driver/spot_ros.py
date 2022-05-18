@@ -57,6 +57,9 @@ class SpotROS():
         self.callbacks["front_image"] = self.FrontImageCB
         self.callbacks["side_image"] = self.SideImageCB
         self.callbacks["rear_image"] = self.RearImageCB
+        self.front_camera_tf_published = False
+        self.rear_camera_tf_published = False
+        self.side_cameras_tf_published = False
 
     def RobotStateCB(self, results):
         """Callback for when the Spot Wrapper gets new robot state data.
@@ -315,27 +318,25 @@ class SpotROS():
         """ROS service handler to set a stair mode to the robot."""
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
-            mobility_params.stair_hint = req.data
+            mobility_params.stair_hint = not mobility_params.stair_hint
             self.spot_wrapper.set_mobility_params( mobility_params )
-            return SetBoolResponse(True, 'Success')
+            return TriggerResponse(True, 'Success')
         except Exception as e:
-            return SetBoolResponse(False, 'Error:{}'.format(e))
+            return TriggerResponse(False, 'Error:{}'.format(e))
 
     def handle_obstacle_avoidance_mode(self, req):
         """ROS service handler to toggle obstacle avoidance for the robot."""
-        padding = 0.25
-        if req.data:
-            padding = 0.001        
         try:
+            self.isAvoiding = not self.isAvoiding
             mobility_params = self.spot_wrapper.get_mobility_params()
-            mobility_params.obstacle_params.disable_vision_body_obstacle_avoidance = req.data
-            mobility_params.obstacle_params.disable_vision_foot_obstacle_avoidance = req.data
-            mobility_params.obstacle_params.disable_vision_foot_constraint_avoidance = req.data
-            mobility_params.obstacle_params.obstacle_avoidance_padding = padding
+            mobility_params.obstacle_params.disable_vision_body_obstacle_avoidance = not self.isAvoiding
+            mobility_params.obstacle_params.disable_vision_foot_obstacle_avoidance = not self.isAvoiding
+            mobility_params.obstacle_params.disable_vision_foot_constraint_avoidance = not self.isAvoiding
+            mobility_params.obstacle_params.obstacle_avoidance_padding = 0.0 if self.isAvoiding else 0.001
             self.spot_wrapper.set_mobility_params( mobility_params )
-            return SetBoolResponse(True, 'Success')
+            return TriggerResponse(True, 'Success')
         except Exception as e:
-            return SetBoolResponse(False, 'Error:{}'.format(e))
+            return TriggerResponse(False, 'Error:{}'.format(e))
 
     def handle_gait_auto(self, req):
         return self.handle_gait(1)
@@ -568,6 +569,7 @@ class SpotROS():
         self.estop_timeout = rospy.get_param('~estop_timeout', 9.0)
         self.publish_odom_tf = rospy.get_param('~publish_odom_tf', False)
         self.use_enu_frame = rospy.get_param('~use_enu_frame', True)
+        self.isAvoiding = True
 
         self.camera_static_transform_broadcaster = tf2_ros.StaticTransformBroadcaster()
         # Static transform broadcaster is super simple and just a latched publisher. Every time we add a new static
@@ -670,8 +672,8 @@ class SpotROS():
             rospy.Service("estop/gentle", Trigger, self.handle_estop_soft)
             rospy.Service("estop/release", Trigger, self.handle_estop_disengage)
 
-            rospy.Service("stair_mode", SetBool, self.handle_stair_mode)
-            rospy.Service("obstacle_avoidance", SetBool, self.handle_obstacle_avoidance_mode)
+            rospy.Service("stair_mode", Trigger, self.handle_stair_mode)
+            rospy.Service("obstacle_avoidance", Trigger, self.handle_obstacle_avoidance_mode)
             rospy.Service("locomotion_mode", SetLocomotion, self.handle_locomotion_mode)
             rospy.Service("max_velocity", SetVelocity, self.handle_max_vel)
             rospy.Service("clear_behavior_fault", ClearBehaviorFault, self.handle_clear_behavior_fault)
@@ -735,7 +737,9 @@ class SpotROS():
                     mobility_params_msg.body_control.orientation.w = \
                             mobility_params.body_control.base_offset_rt_footprint.points[0].pose.rotation.w
                     mobility_params_msg.locomotion_hint = mobility_params.locomotion_hint
+                    mobility_params_msg.swing_height = mobility_params.swing_height
                     mobility_params_msg.stair_hint = mobility_params.stair_hint
+                    mobility_params_msg.obstacle_params = mobility_params.obstacle_params
                 except Exception as e:
                     rospy.logerr('Error:{}'.format(e))
                     pass
