@@ -72,7 +72,7 @@ class SpotROS():
             self.joint_state_pub.publish(joint_state)
 
             ## TF ##
-            tf_msg = GetTFFromState(state, self.spot_wrapper, self.mode_parent_odom_tf, self.tf_prefix, self.publish_odom)
+            tf_msg = GetTFFromState(state, self.spot_wrapper, self.mode_parent_odom_tf, self.tf_prefix, self.publish_odom_tf)
             if len(tf_msg.transforms) > 0:
                 self.tf_pub.publish(tf_msg)
 
@@ -566,7 +566,7 @@ class SpotROS():
         self.tf_prefix = rospy.get_param('~tf_prefix', '')
         self.motion_deadzone = rospy.get_param('~deadzone', 0.05)
         self.estop_timeout = rospy.get_param('~estop_timeout', 9.0)
-        self.publish_odom = rospy.get_param('~publish_odom', False)
+        self.publish_odom_tf = rospy.get_param('~publish_odom_tf', False)
         self.use_enu_frame = rospy.get_param('~use_enu_frame', True)
 
         self.camera_static_transform_broadcaster = tf2_ros.StaticTransformBroadcaster()
