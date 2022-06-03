@@ -249,14 +249,15 @@ class SpotWrapper():
             return
 
         self._robot = self._sdk.create_robot(self._hostname)
-
-        try:
-            self._robot.authenticate(self._username, self._password)
-            self._robot.start_time_sync()
-        except RpcError as err:
-            self._logger.error("Failed to communicate with robot: %s", err)
-            self._valid = False
-            return
+        
+        while True:
+            try:
+                self._robot.authenticate(self._username, self._password)
+                self._robot.start_time_sync()
+                break
+            except RpcError as err:
+                self._logger.error("Failed to communicate with robot %s: %s", self._hostname, err)
+                time.sleep(2)
 
         if self._robot:
             # Clients
