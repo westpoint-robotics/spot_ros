@@ -250,6 +250,7 @@ class SpotWrapper():
 
         self._robot = self._sdk.create_robot(self._hostname)
         
+        # Connect to platform
         while True:
             try:
                 self._robot.authenticate(self._username, self._password)
@@ -259,8 +260,8 @@ class SpotWrapper():
                 self._logger.error("Failed to communicate with robot %s: %s", self._hostname, err)
                 time.sleep(2)
 
-        if self._robot:
-            # Clients
+        # Get Api Clients
+        while True:
             try:
                 self._robot_state_client = self._robot.ensure_client(RobotStateClient.default_service_name)
                 self._robot_command_client = self._robot.ensure_client(RobotCommandClient.default_service_name)
@@ -270,35 +271,35 @@ class SpotWrapper():
                 self._lease_wallet = self._lease_client.lease_wallet
                 self._image_client = self._robot.ensure_client(ImageClient.default_service_name)
                 self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
+                break
             except Exception as e:
                 self._logger.error("Unable to create client service: %s", e)
-                self._valid = False
-                return
+                time.sleep(2)
 
-            # Store the most recent knowledge of the state of the robot based on rpc calls.
-            self._current_graph = None
-            self._current_edges = dict()  #maps to_waypoint to list(from_waypoint)
-            self._current_waypoint_snapshots = dict()  # maps id to waypoint snapshot
-            self._current_edge_snapshots = dict()  # maps id to edge snapshot
-            self._current_annotation_name_to_wp_id = dict()
+        # Store the most recent knowledge of the state of the robot based on rpc calls.
+        self._current_graph = None
+        self._current_edges = dict()  #maps to_waypoint to list(from_waypoint)
+        self._current_waypoint_snapshots = dict()  # maps id to waypoint snapshot
+        self._current_edge_snapshots = dict()  # maps id to edge snapshot
+        self._current_annotation_name_to_wp_id = dict()
 
-            # Async Tasks
-            self._async_task_list = []
-            self._robot_state_task = AsyncRobotState(self._robot_state_client, self._logger, max(0.0, self._rates.get("robot_state", 0.0)), self._callbacks.get("robot_state", lambda:None))
-            self._robot_metrics_task = AsyncMetrics(self._robot_state_client, self._logger, max(0.0, self._rates.get("metrics", 0.0)), self._callbacks.get("metrics", lambda:None))
-            self._lease_task = AsyncLease(self._lease_client, self._logger, max(0.0, self._rates.get("lease", 0.0)), self._callbacks.get("lease", lambda:None))
-            self._front_image_task = AsyncImageService(self._image_client, self._logger, max(0.0, self._rates.get("front_image", 0.0)), self._callbacks.get("front_image", lambda:None), self._front_image_requests)
-            self._side_image_task = AsyncImageService(self._image_client, self._logger, max(0.0, self._rates.get("side_image", 0.0)), self._callbacks.get("side_image", lambda:None), self._side_image_requests)
-            self._rear_image_task = AsyncImageService(self._image_client, self._logger, max(0.0, self._rates.get("rear_image", 0.0)), self._callbacks.get("rear_image", lambda:None), self._rear_image_requests)
-            self._idle_task = AsyncIdle(self._robot_command_client, self._logger, 10.0, self)
+        # Async Tasks
+        self._async_task_list = []
+        self._robot_state_task = AsyncRobotState(self._robot_state_client, self._logger, max(0.0, self._rates.get("robot_state", 0.0)), self._callbacks.get("robot_state", lambda:None))
+        self._robot_metrics_task = AsyncMetrics(self._robot_state_client, self._logger, max(0.0, self._rates.get("metrics", 0.0)), self._callbacks.get("metrics", lambda:None))
+        self._lease_task = AsyncLease(self._lease_client, self._logger, max(0.0, self._rates.get("lease", 0.0)), self._callbacks.get("lease", lambda:None))
+        self._front_image_task = AsyncImageService(self._image_client, self._logger, max(0.0, self._rates.get("front_image", 0.0)), self._callbacks.get("front_image", lambda:None), self._front_image_requests)
+        self._side_image_task = AsyncImageService(self._image_client, self._logger, max(0.0, self._rates.get("side_image", 0.0)), self._callbacks.get("side_image", lambda:None), self._side_image_requests)
+        self._rear_image_task = AsyncImageService(self._image_client, self._logger, max(0.0, self._rates.get("rear_image", 0.0)), self._callbacks.get("rear_image", lambda:None), self._rear_image_requests)
+        self._idle_task = AsyncIdle(self._robot_command_client, self._logger, 10.0, self)
 
-            self._estop_endpoint = None
+        self._estop_endpoint = None
 
-            self._async_tasks = AsyncTasks(
-                [self._robot_state_task, self._robot_metrics_task, self._lease_task, self._front_image_task, self._side_image_task, self._rear_image_task, self._idle_task])
+        self._async_tasks = AsyncTasks(
+            [self._robot_state_task, self._robot_metrics_task, self._lease_task, self._front_image_task, self._side_image_task, self._rear_image_task, self._idle_task])
 
-            self._robot_id = None
-            self._lease = None
+        self._robot_id = None
+        self._lease = None
 
     @property
     def logger(self):
