@@ -206,16 +206,13 @@ class AsyncIdle(AsyncPeriodicQuery):
 
 class SpotWrapper():
     """Generic wrapper class to encompass release 1.1.4 API features as well as maintaining leases automatically"""
-    def __init__(self, username, password, hostname, logger, estop_timeout=9.0, rates = {}, callbacks = {}):
-        self._username = username
-        self._password = password
-        self._hostname = hostname
+    def __init__(self, logger, estop_timeout=9.0, rates = {}, callbacks = {}):
         self._logger = logger
         self._rates = rates
         self._callbacks = callbacks
         self._estop_timeout = estop_timeout
         self._keep_alive = True
-        self._valid = True
+        self._valid = False
 
         self._mobility_params = RobotCommandBuilder.mobility_params()
         self._is_standing = False
@@ -241,41 +238,6 @@ class SpotWrapper():
         for source in rear_image_sources:
             self._rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
 
-        try:
-            self._sdk = create_standard_sdk('ros_spot')
-        except Exception as e:
-            self._logger.error("Error creating SDK object: %s", e)
-            self._valid = False
-            return
-
-        self._robot = self._sdk.create_robot(self._hostname)
-        
-        # Connect to platform
-        while True:
-            try:
-                self._robot.authenticate(self._username, self._password)
-                self._robot.start_time_sync()
-                break
-            except RpcError as err:
-                self._logger.error("Failed to communicate with robot %s: %s", self._hostname, err)
-                time.sleep(2)
-
-        # Get Api Clients
-        while True:
-            try:
-                self._robot_state_client = self._robot.ensure_client(RobotStateClient.default_service_name)
-                self._robot_command_client = self._robot.ensure_client(RobotCommandClient.default_service_name)
-                self._graph_nav_client = self._robot.ensure_client(GraphNavClient.default_service_name)
-                self._power_client = self._robot.ensure_client(PowerClient.default_service_name)
-                self._lease_client = self._robot.ensure_client(LeaseClient.default_service_name)
-                self._lease_wallet = self._lease_client.lease_wallet
-                self._image_client = self._robot.ensure_client(ImageClient.default_service_name)
-                self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
-                break
-            except Exception as e:
-                self._logger.error("Unable to create client service: %s", e)
-                time.sleep(2)
-
         # Store the most recent knowledge of the state of the robot based on rpc calls.
         self._current_graph = None
         self._current_edges = dict()  #maps to_waypoint to list(from_waypoint)
@@ -283,6 +245,36 @@ class SpotWrapper():
         self._current_edge_snapshots = dict()  # maps id to edge snapshot
         self._current_annotation_name_to_wp_id = dict()
 
+        try:
+            self._sdk = create_standard_sdk('ros_spot')
+        except Exception as e:
+            self._logger.error("Error creating SDK object: %s", e)
+
+    def connect(self, hostname, username, password):
+        self._robot = self._sdk.create_robot(hostname)
+        
+        # Connect to platform
+        try:
+            self._robot.authenticate(username, password)
+            self._robot.start_time_sync()
+        except RpcError as err:
+            self._logger.error("Failed to communicate with robot %s: %s", hostname, err)
+            raise
+
+        # Get Api Clients
+        try:
+            self._robot_state_client = self._robot.ensure_client(RobotStateClient.default_service_name)
+            self._robot_command_client = self._robot.ensure_client(RobotCommandClient.default_service_name)
+            self._graph_nav_client = self._robot.ensure_client(GraphNavClient.default_service_name)
+            self._power_client = self._robot.ensure_client(PowerClient.default_service_name)
+            self._lease_client = self._robot.ensure_client(LeaseClient.default_service_name)
+            self._lease_wallet = self._lease_client.lease_wallet
+            self._image_client = self._robot.ensure_client(ImageClient.default_service_name)
+            self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
+        except Exception as e:
+            self._logger.error("Unable to create client service: %s", e)
+            raise
+        
         # Async Tasks
         self._async_task_list = []
         self._robot_state_task = AsyncRobotState(self._robot_state_client, self._logger, max(0.0, self._rates.get("robot_state", 0.0)), self._callbacks.get("robot_state", lambda:None))
@@ -300,6 +292,7 @@ class SpotWrapper():
 
         self._robot_id = None
         self._lease = None
+        self._valid = True
 
     @property
     def logger(self):

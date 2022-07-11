@@ -561,9 +561,6 @@ class SpotROS():
         rate = rospy.Rate(50)
 
         self.rates = rospy.get_param('~rates', {})
-        self.username = rospy.get_param('~username', 'default_value')
-        self.password = rospy.get_param('~password', 'default_value')
-        self.hostname = rospy.get_param('~hostname', 'default_value')
         self.tf_prefix = rospy.get_param('~tf_prefix', '')
         self.motion_deadzone = rospy.get_param('~deadzone', 0.05)
         self.estop_timeout = rospy.get_param('~estop_timeout', 9.0)
@@ -595,8 +592,19 @@ class SpotROS():
         self.logger = logging.getLogger('rosout')
 
         rospy.loginfo("Starting ROS driver for Spot")
-        self.spot_wrapper = SpotWrapper(self.username, self.password, self.hostname, self.logger, self.estop_timeout, self.rates, self.callbacks)
+        self.spot_wrapper = SpotWrapper(self.logger, self.estop_timeout, self.rates, self.callbacks)
 
+        # try connecting until success or shutdown
+        while not rospy.is_shutdown():
+            try:
+                username = rospy.get_param('~username', 'default_value')
+                password = rospy.get_param('~password', 'default_value')
+                hostname = rospy.get_param('~hostname', 'default_value')
+                self.spot_wrapper.connect(username, password, hostname)
+                break
+            except:
+                rospy.sleep(2)
+        
         if self.spot_wrapper.is_valid:
             # Images #
             self.back_image_pub = rospy.Publisher('camera/back/image', Image, queue_size=10)
