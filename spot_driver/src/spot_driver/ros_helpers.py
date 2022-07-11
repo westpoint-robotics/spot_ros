@@ -360,7 +360,7 @@ def GetTFFromState(state, spot_wrapper, inverse_target_frame, tf_prefix, publish
                 local_time = spot_wrapper.robotToLocalTime(state.kinematic_state.acquisition_timestamp)
                 tf_time = rospy.Time(local_time.seconds, local_time.nanos)
                 if inverse_target_frame == frame_name:
-                    geo_tform_inversed = SE3Pose.from_obj(transform.parent_tform_child).inverse()
+                    geo_tform_inversed = SE3Pose.from_proto(transform.parent_tform_child).inverse()
                     new_tf = populateTransformStamped(tf_time, frame_name, transform.parent_frame_name, geo_tform_inversed, tf_prefix)
                 else:
                     new_tf = populateTransformStamped(tf_time, transform.parent_frame_name, frame_name, transform.parent_tform_child, tf_prefix)
