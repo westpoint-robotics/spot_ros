@@ -600,7 +600,7 @@ class SpotROS():
                 username = rospy.get_param('~username', 'default_value')
                 password = rospy.get_param('~password', 'default_value')
                 hostname = rospy.get_param('~hostname', 'default_value')
-                self.spot_wrapper.connect(username, password, hostname)
+                self.spot_wrapper.connect(hostname, username, password)
                 break
             except:
                 rospy.sleep(2)
